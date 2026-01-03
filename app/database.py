@@ -4,11 +4,21 @@ from sqlalchemy.orm import sessionmaker
 from app.config import settings
 
 # Create database engine
+connect_args = {}
+engine_args = {
+    "pool_pre_ping": True,
+}
+
+if "sqlite" in settings.database_url:
+    connect_args["check_same_thread"] = False
+    engine_args["connect_args"] = connect_args
+else:
+    engine_args["pool_size"] = 10
+    engine_args["max_overflow"] = 20
+
 engine = create_engine(
     settings.database_url,
-    pool_pre_ping=True,
-    pool_size=10,
-    max_overflow=20
+    **engine_args
 )
 
 # Create session factory

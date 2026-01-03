@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
@@ -44,7 +44,19 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     return encoded_jwt
 
 @router.post("/register", response_model=UserSchema)
-def register(user: UserCreate, db: Session = Depends(get_db)):
+def register(
+    user: UserCreate, 
+    db: Session = Depends(get_db),
+    registration_key: str = Query(None, alias="key", description="Registration key if required by server")
+):
+    # Check if registration is restricted
+    env_key = os.getenv("REGISTRATION_KEY")
+    if env_key and env_key != registration_key:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail="Registration is restricted. Please provide a valid registration key."
+        )
+        
     db_user = db.query(User).filter(User.email == user.email).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")

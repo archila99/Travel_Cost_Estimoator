@@ -43,11 +43,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
-app.include_router(auth.router)
-app.include_router(vehicles.router)
-app.include_router(routes.router)
-app.include_router(trips.router)
+# Include routers with /api prefix
+app.include_router(auth.router, prefix="/api")
+app.include_router(vehicles.router, prefix="/api")
+app.include_router(routes.router, prefix="/api")
+app.include_router(trips.router, prefix="/api")
+
+# Mount static files (after API routes)
+from fastapi.staticfiles import StaticFiles
+import os
+
+# Check if static directory exists (it will in the Docker container)
+if os.path.exists("static"):
+    app.mount("/assets", StaticFiles(directory="static/assets"), name="assets")
+    
+    # Serve index.html for root and SPA routes
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        # Allow API routes to pass through if they weren't caught above (though strictly they should be)
+        if full_path.startswith("api/"):
+             return JSONResponse(status_code=404, content={"detail": "Not found"})
+        return FileResponse("static/index.html")
+
+from fastapi.responses import FileResponse
 
 
 @app.get("/", tags=["root"])

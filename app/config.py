@@ -10,6 +10,10 @@ class Settings(BaseSettings):
     
     # Database
     database_url: str
+
+    # Security
+    secret_key: str
+    registration_key: Optional[str] = None
     
     # Application defaults
     fuel_price_default: float = 1.50

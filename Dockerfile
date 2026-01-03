@@ -1,25 +1,38 @@
+# Build Stage: Frontend
+FROM node:18-alpine as frontend_build
+WORKDIR /frontend
+COPY frontend/package*.json ./
+RUN npm install
+COPY frontend .
+# Build with /api prefix for production
+ENV VITE_API_BASE_URL=/api
+RUN npm run build
+
+# Run Stage: Backend
 FROM python:3.11-slim
 
-# Set working directory
 WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
     postgresql-client \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
+# Copy requirements first
 COPY requirements.txt .
-
-# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy backend code
 COPY . .
 
-# Expose port
-EXPOSE 8000
+# Copy built frontend assets
+COPY --from=frontend_build /frontend/dist /app/static
 
-# Run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Expose port
+EXPOSE 8080
+
+# Run with Gunicorn (production server)
+# Use the PORT environment variable for Cloud Run
+CMD exec gunicorn --bind :$PORT --workers 1 --worker-class uvicorn.workers.UvicornWorker --threads 8 app.main:app
