@@ -69,6 +69,5 @@ jobs:
           env_vars: |
             DATABASE_URL=postgresql+psycopg2://postgres:${{ secrets.DB_PASSWORD }}@/travel_estimator?host=/cloudsql/${{ env.INSTANCE_CONNECTION_NAME }}
             DB_PASSWORD=${{ secrets.DB_PASSWORD }}
-            # Remove these lines if you haven't added the secrets
             SECRET_KEY=${{ secrets.SECRET_KEY }}
             REGISTRATION_KEY=${{ secrets.REGISTRATION_KEY }}
