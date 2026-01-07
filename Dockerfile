@@ -30,9 +30,16 @@ COPY . .
 # Copy built frontend assets
 COPY --from=frontend_build /frontend/dist /app/static
 
+# Copy entrypoint script
+COPY scripts/entrypoint.sh /app/scripts/
+RUN chmod +x /app/scripts/entrypoint.sh
+
 # Expose port
 EXPOSE 8080
 
+# Use entrypoint script to run migrations
+ENTRYPOINT ["/app/scripts/entrypoint.sh"]
+
 # Run with Gunicorn (production server)
 # Use the PORT environment variable for Cloud Run
-CMD exec gunicorn --bind :$PORT --workers 1 --worker-class uvicorn.workers.UvicornWorker --threads 8 app.main:app
+CMD gunicorn --bind :$PORT --workers 1 --worker-class uvicorn.workers.UvicornWorker --threads 8 app.main:app

@@ -68,15 +68,7 @@ if os.path.exists("static"):
 from fastapi.responses import FileResponse
 
 
-@app.get("/", tags=["root"])
-def read_root():
-    """Root endpoint with API information."""
-    return {
-        "message": "Welcome to Route Planner and Travel Cost Estimator API",
-        "version": "1.0.0",
-        "docs": "/docs",
-        "health": "/health"
-    }
+
 
 
 @app.get("/health", tags=["health"])
