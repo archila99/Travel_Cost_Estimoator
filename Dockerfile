@@ -40,6 +40,10 @@ EXPOSE 8080
 # Use entrypoint script to run migrations
 ENTRYPOINT ["/app/scripts/entrypoint.sh"]
 
+# Set default PORT for Cloud Run (8080 is Cloud Run's default)
+ENV PORT=8080
+
 # Run with Gunicorn (production server)
 # Use the PORT environment variable for Cloud Run
-CMD gunicorn --bind :$PORT --workers 1 --worker-class uvicorn.workers.UvicornWorker --threads 8 app.main:app
+# Use sh -c to ensure PORT variable expansion works correctly
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-8080} --workers 1 --worker-class uvicorn.workers.UvicornWorker --threads 8 --timeout 120 app.main:app"]
