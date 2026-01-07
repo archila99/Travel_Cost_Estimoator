@@ -9,7 +9,7 @@ env:
   PROJECT_ID: ${{ secrets.PROJECT_ID }}
   Run_REGION: europe-west2
   SERVICE_NAME: travel-estimator
-  REPO_NAME: travel-repo
+  REPO_NAME: travel-repo 
   INSTANCE_CONNECTION_NAME: my-backend-prod:europe-west2:first-resume-project
 
 jobs:
@@ -21,21 +21,26 @@ jobs:
       id-token: 'write'
 
     steps:
+      # 1. Checkout code
       - name: Checkout
         uses: actions/checkout@v4
 
+      # 2. Authenticate with Google Cloud
       - name: Google Auth
         id: auth
         uses: google-github-actions/auth@v2
         with:
           credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
 
+      # 3. Set up Cloud SDK
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      # 4. Configure Docker for Artifact Registry
       - name: Authorize Docker push
-        run: gcloud auth configure-docker us-central1-docker.pkg.dev
+        run: gcloud auth configure-docker ${{ env.Run_REGION }}-docker.pkg.dev
 
+      # 5. Ensure Artifact Registry exists
       - name: Ensure Artifact Registry exists
         run: |
           if ! gcloud artifacts repositories describe $REPO_NAME --location=$Run_REGION &>/dev/null; then
@@ -45,13 +50,15 @@ jobs:
             echo "Artifact Registry exists."
           fi
 
+      # 6. Build and push Docker image
       - name: Build and Push Container
         run: |
-          IMAGE_TAG="us-central1-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/$SERVICE_NAME:${{ github.sha }}"
+          IMAGE_TAG="${{ env.Run_REGION }}-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/$SERVICE_NAME:${{ github.sha }}"
           docker build -t $IMAGE_TAG .
           docker push $IMAGE_TAG
           echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
 
+      # 7. Deploy to Cloud Run
       - name: Deploy to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v2
         with:
@@ -62,5 +69,6 @@ jobs:
           env_vars: |
             DATABASE_URL=postgresql+psycopg2://postgres:${{ secrets.DB_PASSWORD }}@/travel_estimator?host=/cloudsql/${{ env.INSTANCE_CONNECTION_NAME }}
             DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            # Remove these lines if you haven't added the secrets
             SECRET_KEY=${{ secrets.SECRET_KEY }}
             REGISTRATION_KEY=${{ secrets.REGISTRATION_KEY }}
