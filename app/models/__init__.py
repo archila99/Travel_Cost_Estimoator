@@ -1,5 +1,6 @@
 """Models package initialization."""
 from app.models.vehicle import Vehicle
 from app.models.trip import Trip
+from app.models.user import User
 
-__all__ = ["Vehicle", "Trip"]
+__all__ = ["Vehicle", "Trip", "User"]

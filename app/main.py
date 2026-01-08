@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 import logging
 
 from app.database import engine, Base
+from app.models import User, Vehicle, Trip  # Import all models to ensure they are registered
 from app.routers import vehicles, routes, trips, auth
 
 # Configure logging
@@ -20,7 +21,10 @@ async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown events."""
     # Startup
     logger.info("Starting up application...")
-    logger.info("Database tables will be created by Alembic migrations")
+    # Create tables if they don't exist
+    logger.info("Ensuring database tables exist...")
+    Base.metadata.create_all(bind=engine)
+    logger.info("Database tables verified.")
     yield
     # Shutdown
     logger.info("Shutting down application...")
