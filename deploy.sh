@@ -11,6 +11,13 @@ REPO_NAME="travel-repo"
 IMAGE_NAME="travel-app"
 IMAGE_TAG="$REGION-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/$IMAGE_NAME:latest"
 
+# Check for Google Maps API Key
+if [ -z "$GOOGLE_MAPS_API_KEY" ]; then
+    echo "❌ Error: GOOGLE_MAPS_API_KEY environment variable is not set."
+    echo "Please export it before running the script: export GOOGLE_MAPS_API_KEY='your_key'"
+    exit 1
+fi
+
 echo "🚀 Starting Deployment for Project: $PROJECT_ID"
 
 # 1. Enable APIs
@@ -71,7 +78,8 @@ gcloud run deploy $SERVICE_NAME \
     --set-env-vars "DATABASE_URL=postgresql+psycopg2://postgres:$DB_PASSWORD@/$DB_NAME?host=/cloudsql/$INSTANCE_CONNECTION_NAME" \
     --set-env-vars "SECRET_KEY=$(openssl rand -hex 32)" \
     --set-env-vars "REGISTRATION_KEY=$REG_KEY" \
-    --set-env-vars "GCP_PROJECT_ID=$PROJECT_ID"
+    --set-env-vars "GCP_PROJECT_ID=$PROJECT_ID" \
+    --set-env-vars "GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}"
 
 echo "✅ Deployment Complete!"
 echo "Service URL: $(gcloud run services describe $SERVICE_NAME --platform managed --region $REGION --format 'value(status.url)')"

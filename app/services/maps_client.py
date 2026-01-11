@@ -60,6 +60,10 @@ class GoogleMapsClient:
         }
 
         try:
+            # Check for placeholder key before making request
+            if "your_google_maps_api_key" in self.api_key:
+                 raise ValueError("Google Maps API Configuration Error: Default placeholder key in use. Please configure a valid API key.")
+
             with httpx.Client() as client:
                 response = client.post(
                     self.base_url,
@@ -69,7 +73,14 @@ class GoogleMapsClient:
                 )
                 
                 if response.status_code != 200:
-                    raise Exception(f"Routes API Error {response.status_code}: {response.text}")
+                    error_msg = f"Routes API Error: {response.status_code}"
+                    try:
+                        error_details = response.json()
+                        if "error" in error_details and "message" in error_details["error"]:
+                            error_msg += f" - {error_details['error']['message']}"
+                    except:
+                        error_msg += f" - {response.text}"
+                    raise Exception(error_msg)
                 
                 data = response.json()
                 
@@ -97,7 +108,8 @@ class GoogleMapsClient:
                 return parsed_routes
 
         except Exception as e:
-            raise Exception(f"Error fetching directions: {str(e)}")
+            # Re-raise exceptions to be handled by the router
+            raise e
 
 
 # Global client instance

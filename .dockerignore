@@ -1,0 +1,13 @@
+.env
+.env.backup
+.env.example
+.git
+.gitignore
+venv
+__pycache__
+*.pyc
+.DS_Store
+README.md
+task.md
+implementation_plan.md
+walkthrough.md
