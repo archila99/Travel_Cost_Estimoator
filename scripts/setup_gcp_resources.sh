@@ -61,6 +61,15 @@ else
     echo "If you don't have the password, you may need to reset it."
 fi
 
+# Ensure the database exists (create if missing, e.g. instance was created outside this script)
+if gcloud sql databases describe $DB_NAME --instance=$DB_INSTANCE_NAME &>/dev/null; then
+    echo "Database '$DB_NAME' already exists."
+else
+    echo "Creating database '$DB_NAME'..."
+    gcloud sql databases create $DB_NAME --instance=$DB_INSTANCE_NAME
+    echo "✅ Database created."
+fi
+
 # Get Connection Name
 INSTANCE_CONNECTION_NAME=$(gcloud sql instances describe $DB_INSTANCE_NAME --format="value(connectionName)")
 echo "DATABASE_URL usage (for secrets): postgresql+psycopg2://postgres:<DB_PASSWORD>@/$DB_NAME?host=/cloudsql/$INSTANCE_CONNECTION_NAME"

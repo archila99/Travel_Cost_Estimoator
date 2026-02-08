@@ -11,11 +11,13 @@ export default function Login() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setError('');
         try {
             await login(email, password);
-            navigate('/');
+            // Defer navigation so AuthProvider state is committed before Dashboard renders
+            window.requestAnimationFrame(() => navigate('/'));
         } catch (err) {
-            setError('Failed to login. Check your credentials.');
+            setError(err?.message || 'Failed to login. Check your credentials.');
         }
     };
 

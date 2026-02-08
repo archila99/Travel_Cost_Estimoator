@@ -5,17 +5,19 @@ import { useNavigate, Link } from 'react-router-dom';
 export default function Register() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [registrationKey, setRegistrationKey] = useState('');
     const [error, setError] = useState('');
     const { register } = useAuth();
     const navigate = useNavigate();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setError('');
         try {
-            await register(email, password);
+            await register(email, password, registrationKey.trim() || null);
             navigate('/');
         } catch (err) {
-            setError('Failed to register. Email might be already taken.');
+            setError(err?.message || 'Failed to register. Email might be already taken.');
         }
     };
 
@@ -41,6 +43,16 @@ export default function Register() {
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         required
+                        style={{ width: '100%', padding: '0.5rem', marginTop: '0.5rem' }}
+                    />
+                </div>
+                <div style={{ marginBottom: '1rem' }}>
+                    <label>Registration key (if required by the app):</label>
+                    <input
+                        type="text"
+                        value={registrationKey}
+                        onChange={(e) => setRegistrationKey(e.target.value)}
+                        placeholder="Leave blank if registration is open"
                         style={{ width: '100%', padding: '0.5rem', marginTop: '0.5rem' }}
                     />
                 </div>

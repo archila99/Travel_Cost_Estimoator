@@ -19,13 +19,16 @@ export const AuthProvider = ({ children }) => {
 
     const login = async (email, password) => {
         const data = await api.login(email, password);
+        if (!data?.access_token) {
+            throw new Error('Invalid login response');
+        }
         localStorage.setItem('token', data.access_token);
         setUser({ email: email });
         return data;
     };
 
-    const register = async (email, password) => {
-        await api.register(email, password);
+    const register = async (email, password, registrationKey = null) => {
+        await api.register(email, password, registrationKey);
         return login(email, password);
     };
 

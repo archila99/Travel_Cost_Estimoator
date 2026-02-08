@@ -90,7 +90,15 @@ if [ -z "$SECRET_KEY" ] || [ "$SECRET_KEY" = "your_secret_key_for_jwt_here" ]; t
   SECRET_KEY=$(openssl rand -hex 32)
   echo "Generated new SECRET_KEY for this deploy (set SECRET_KEY env to reuse across deploys)."
 fi
-REG_KEY="${REGISTRATION_KEY:-$(openssl rand -hex 16)}"
+
+# Registration: set REGISTRATION_KEY in .env to restrict sign-ups (users need the key). Leave unset for open registration.
+ENV_VARS="DATABASE_URL=${DATABASE_URL},SECRET_KEY=${SECRET_KEY},GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}"
+if [ -n "${REGISTRATION_KEY:-}" ]; then
+  ENV_VARS="${ENV_VARS},REGISTRATION_KEY=${REGISTRATION_KEY}"
+  echo "Registration: restricted (REGISTRATION_KEY set). Share the key with users who may register."
+else
+  echo "Registration: open (no REGISTRATION_KEY set). Set REGISTRATION_KEY in .env to restrict."
+fi
 
 echo "Deploying to Cloud Run..."
 gcloud run deploy $SERVICE_NAME \
@@ -99,10 +107,7 @@ gcloud run deploy $SERVICE_NAME \
   --region "$REGION" \
   --allow-unauthenticated \
   --add-cloudsql-instances "$INSTANCE_CONNECTION_NAME" \
-  --set-env-vars "DATABASE_URL=${DATABASE_URL}" \
-  --set-env-vars "SECRET_KEY=${SECRET_KEY}" \
-  --set-env-vars "REGISTRATION_KEY=${REG_KEY}" \
-  --set-env-vars "GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}" \
+  --set-env-vars "$ENV_VARS" \
   --timeout 300 \
   --quiet
 
@@ -110,5 +115,4 @@ SERVICE_URL=$(gcloud run services describe $SERVICE_NAME --platform managed --re
 echo ""
 echo "✅ Deployment complete!"
 echo "   URL: $SERVICE_URL"
-echo "   Registration key (if you need it): $REG_KEY"
 echo "   (SECRET_KEY was generated; set SECRET_KEY env before next deploy to keep the same JWT signing key.)"

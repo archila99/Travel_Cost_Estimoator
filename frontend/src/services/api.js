@@ -42,6 +42,10 @@ class ApiService {
                 return null;
             }
 
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error('Invalid response: expected JSON. Check API base URL (e.g. /api for same-origin).');
+            }
             return await response.json();
         } catch (error) {
             console.error('API Error:', error);
@@ -65,8 +69,11 @@ class ApiService {
         });
     }
 
-    async register(email, password) {
-        return this.request('/register', {
+    async register(email, password, registrationKey = null) {
+        const url = registrationKey
+            ? `/register?key=${encodeURIComponent(registrationKey)}`
+            : '/register';
+        return this.request(url, {
             method: 'POST',
             body: JSON.stringify({ email, password }),
         });

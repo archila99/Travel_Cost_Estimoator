@@ -236,7 +236,7 @@ Then from the project root:
 ./deploy.sh
 ```
 
-Optional: set `REGION`, `REGISTRATION_KEY`, or `SECRET_KEY` in `.env` or export them before `./deploy.sh` if you need to override defaults.
+Optional: set `REGION` or `SECRET_KEY` in `.env` before deploy. **Registration:** leave `REGISTRATION_KEY` unset for open sign-ups; set it (e.g. in `.env`) to restrict registration—then share that value with users and they enter it in the Register form’s “Registration key” field.
 
 **3. Result**
 
