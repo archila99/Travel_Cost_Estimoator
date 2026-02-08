@@ -37,7 +37,7 @@ A full-stack web application for calculating travel costs and managing trip hist
 ### Backend
 - **FastAPI** - Modern Python web framework
 - **SQLAlchemy** - ORM for database operations
-- **Alembic** - Database migrations
+- **Alembic** - Optional: for future schema migrations (fresh deploys use `create_all()`)
 - **Pydantic** - Data validation
 - **JWT** - Authentication
 - **Google Maps API** - Route calculation
@@ -153,9 +153,15 @@ SECRET_KEY=your_secret_key_for_jwt
 
 ### Frontend (.env.local)
 ```env
-VITE_API_BASE_URL=http://localhost:8000
+VITE_API_BASE_URL=http://localhost:8000/api
 VITE_GOOGLE_MAPS_API_KEY=your_google_maps_api_key
 ```
+(The API base URL must include `/api` because the backend mounts all API routes under that prefix.)
+
+## Database and migrations
+
+- **Fresh installs / Cloud Run:** The app creates tables on startup via `Base.metadata.create_all()`. No migration step is run in the container.
+- **Alembic** is kept for future schema changes (e.g. adding a column without wiping the DB). When you need it: run `alembic upgrade head` locally or in a one-off job against your DB, or add it back to the deploy flow.
 
 ## Development
 
@@ -164,10 +170,10 @@ VITE_GOOGLE_MAPS_API_KEY=your_google_maps_api_key
 # Run with auto-reload
 uvicorn app.main:app --reload
 
-# Create new migration
+# Create new migration (when you change models and need to migrate existing DBs)
 alembic revision --autogenerate -m "description"
 
-# Apply migrations
+# Apply migrations (local or when managing an existing DB)
 alembic upgrade head
 ```
 
@@ -196,16 +202,83 @@ npm test
 
 ## Deployment
 
-### Using Docker
+**This project does not use GitHub Actions.** Deploy from your machine using `deploy.sh` only.
+
+### Deploy to Google Cloud (`deploy.sh`)
+
+The script builds the Docker image, pushes it to Artifact Registry, and deploys to **Cloud Run** with **Cloud SQL (PostgreSQL)**.
+
+**1. One-time setup**
+
+- Install and log in to [Google Cloud SDK](https://cloud.google.com/sdk/docs/install):
+  ```bash
+  gcloud auth login
+  gcloud config set project YOUR_PROJECT_ID
+  ```
+- Create Cloud SQL and Artifact Registry (once per project):
+  ```bash
+  ./scripts/setup_gcp_resources.sh
+  ```
+  **Save the DB password** printed when the database is created.
+
+**2. Configure and deploy**
+
+Put your secrets in `.env` at the project root (see `.env.example`). `deploy.sh` loads `.env` automatically, so you don’t need to export variables each time:
+
+```env
+GOOGLE_MAPS_API_KEY=your_google_maps_api_key
+DB_PASSWORD=password_from_setup_script
+```
+
+Then from the project root:
+
+```bash
+./deploy.sh
+```
+
+Optional: set `REGION`, `REGISTRATION_KEY`, or `SECRET_KEY` in `.env` or export them before `./deploy.sh` if you need to override defaults.
+
+**3. Result**
+
+The script prints the Cloud Run service URL. Open it in a browser to use the app.
+
+---
+
+### Using Docker (local)
 ```bash
 docker-compose up -d
 ```
 
-### Manual Deployment
+### Manual deployment (generic)
 1. Build frontend: `cd frontend && npm run build`
 2. Set environment variables for production
 3. Run backend with production server (e.g., Gunicorn)
 4. Serve frontend build files with nginx or similar
+
+## Updating GitHub
+
+- **Push your changes** (README, code, removal of old files):
+  ```bash
+  git add .
+  git status
+  git commit -m "Your message"
+  git push origin main
+  ```
+
+- **Remove a file from the repo** (e.g. an old workflow file that’s already deleted locally):
+  ```bash
+  git rm --cached path/to/file
+  git commit -m "Remove file from repo"
+  git push origin main
+  ```
+  If the file is already deleted locally, `git status` will show it as deleted; run `git add -A` or `git add path/to/file`, then commit and push.
+
+- **Remove a file that still exists locally** so it’s no longer tracked and not on GitHub:
+  ```bash
+  git rm path/to/file
+  git commit -m "Remove file"
+  git push origin main
+  ```
 
 ## Contributing
 

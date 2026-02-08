@@ -1,8 +1,14 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../services/api';
 import MapDisplay from './MapDisplay';
+import { useAuth } from '../context/AuthContext';
+
+const DEFAULT_FUEL_CONSUMPTION = 7;
+const DEFAULT_FUEL_PRICE = 1.5;
 
 export default function RouteCalculator() {
+    const { user } = useAuth();
     const [vehicles, setVehicles] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -12,12 +18,14 @@ export default function RouteCalculator() {
         origin: '',
         destination: '',
         vehicle_id: '',
+        fuel_consumption: DEFAULT_FUEL_CONSUMPTION,
+        fuel_price: DEFAULT_FUEL_PRICE,
         alternatives: false
     });
 
     useEffect(() => {
-        loadVehicles();
-    }, []);
+        if (user) loadVehicles();
+    }, [user]);
 
     const loadVehicles = async () => {
         try {
@@ -33,23 +41,21 @@ export default function RouteCalculator() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-
-        if (!formData.vehicle_id) {
-            setError('Please add a vehicle first');
-            return;
-        }
-
+        setError(null);
         try {
             setLoading(true);
-            setError(null);
-
-            const data = await api.calculateRoute({
+            const payload = {
                 origin: formData.origin,
                 destination: formData.destination,
-                vehicle_id: parseInt(formData.vehicle_id),
                 alternatives: formData.alternatives
-            });
-
+            };
+            if (user && formData.vehicle_id) {
+                payload.vehicle_id = parseInt(formData.vehicle_id);
+            } else {
+                payload.fuel_consumption = Number(formData.fuel_consumption) || DEFAULT_FUEL_CONSUMPTION;
+                payload.fuel_price = Number(formData.fuel_price) || DEFAULT_FUEL_PRICE;
+            }
+            const data = await api.calculateRoute(payload);
             setResult(data);
         } catch (err) {
             setError('Failed to calculate route: ' + err.message);
@@ -67,77 +73,55 @@ export default function RouteCalculator() {
         }));
     };
 
-    const handleSaveTrip = async () => {
-        if (!result || result.routes.length === 0) return;
-
-        try {
-            // Save the recommended route (first route)
-            const route = result.routes[0];
-            await api.createTrip({
-                vehicle_id: parseInt(formData.vehicle_id),
-                origin: formData.origin,
-                destination: formData.destination,
-                distance_km: route.distance_km,
-                duration_minutes: route.duration_minutes,
-                fuel_used_liters: route.fuel_used_liters,
-                fuel_cost: route.fuel_cost,
-                route_type: route.route_type
-            });
-
-            alert('Trip saved successfully! Check your Trip History.');
-        } catch (err) {
-            setError('Failed to save trip: ' + err.message);
-        }
-    };
-
-    const selectedVehicle = vehicles.find(v => v.id === parseInt(formData.vehicle_id));
-
     return (
         <div>
             <div className="card mb-3">
                 <div className="card-header">
                     <h3 className="card-title">Calculate Route</h3>
                     <p className="card-description">
-                        Enter your origin and destination to calculate travel costs
+                        {user
+                            ? 'Enter origin and destination; your trip is saved when you calculate.'
+                            : 'Try it out—enter origin and destination. Log in to save trips and use your vehicles.'}
                     </p>
                 </div>
 
                 {error && <div className="alert alert-error">{error}</div>}
 
-                {vehicles.length === 0 ? (
+                {user && vehicles.length === 0 ? (
                     <div className="alert alert-info">
-                        Please add a vehicle first before calculating routes.
+                        Add a vehicle in the Vehicles tab first, then come back to calculate routes.
                     </div>
-                ) : (
-                    <form onSubmit={handleSubmit}>
-                        <div className="grid grid-2">
-                            <div className="form-group">
-                                <label className="form-label">Origin</label>
-                                <input
-                                    type="text"
-                                    name="origin"
-                                    className="form-input"
-                                    placeholder="e.g., New York, NY"
-                                    value={formData.origin}
-                                    onChange={handleChange}
-                                    required
-                                />
-                            </div>
+                ) : null}
 
-                            <div className="form-group">
-                                <label className="form-label">Destination</label>
-                                <input
-                                    type="text"
-                                    name="destination"
-                                    className="form-input"
-                                    placeholder="e.g., Boston, MA"
-                                    value={formData.destination}
-                                    onChange={handleChange}
-                                    required
-                                />
-                            </div>
+                <form onSubmit={handleSubmit}>
+                    <div className="grid grid-2">
+                        <div className="form-group">
+                            <label className="form-label">Origin</label>
+                            <input
+                                type="text"
+                                name="origin"
+                                className="form-input"
+                                placeholder="e.g., New York, NY"
+                                value={formData.origin}
+                                onChange={handleChange}
+                                required
+                            />
                         </div>
+                        <div className="form-group">
+                            <label className="form-label">Destination</label>
+                            <input
+                                type="text"
+                                name="destination"
+                                className="form-input"
+                                placeholder="e.g., Boston, MA"
+                                value={formData.destination}
+                                onChange={handleChange}
+                                required
+                            />
+                        </div>
+                    </div>
 
+                    {user && vehicles.length > 0 && (
                         <div className="form-group">
                             <label className="form-label">Vehicle</label>
                             <select
@@ -145,7 +129,6 @@ export default function RouteCalculator() {
                                 className="form-select"
                                 value={formData.vehicle_id}
                                 onChange={handleChange}
-                                required
                             >
                                 {vehicles.map(vehicle => (
                                     <option key={vehicle.id} value={vehicle.id}>
@@ -154,42 +137,68 @@ export default function RouteCalculator() {
                                 ))}
                             </select>
                         </div>
+                    )}
 
-                        <div className="form-group">
-                            <label className="form-checkbox">
+                    {!user && (
+                        <div className="grid grid-2">
+                            <div className="form-group">
+                                <label className="form-label">Fuel consumption (L/100km)</label>
                                 <input
-                                    type="checkbox"
-                                    name="alternatives"
-                                    checked={formData.alternatives}
+                                    type="number"
+                                    name="fuel_consumption"
+                                    className="form-input"
+                                    min="1"
+                                    max="50"
+                                    step="0.5"
+                                    value={formData.fuel_consumption}
                                     onChange={handleChange}
                                 />
-                                <span>Show alternative routes</span>
-                            </label>
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label">Fuel price (£/L)</label>
+                                <input
+                                    type="number"
+                                    name="fuel_price"
+                                    className="form-input"
+                                    min="0"
+                                    step="0.01"
+                                    value={formData.fuel_price}
+                                    onChange={handleChange}
+                                />
+                            </div>
                         </div>
+                    )}
 
-                        <div style={{ display: 'flex', gap: '1rem' }}>
-                            <button
-                                type="submit"
-                                className="btn btn-primary"
-                                disabled={loading}
-                                style={{ flex: 1 }}
-                            >
-                                {loading ? 'Calculating...' : 'Calculate Route'}
-                            </button>
+                    <div className="form-group">
+                        <label className="form-checkbox">
+                            <input
+                                type="checkbox"
+                                name="alternatives"
+                                checked={formData.alternatives}
+                                onChange={handleChange}
+                            />
+                            <span>Show alternative routes</span>
+                        </label>
+                    </div>
 
-                            {result && (
-                                <button
-                                    type="button"
-                                    className="btn btn-success"
-                                    onClick={handleSaveTrip}
-                                    style={{ flex: 1 }}
-                                >
-                                    💾 Save Trip
-                                </button>
-                            )}
-                        </div>
-                    </form>
-                )}
+                    <div className="route-actions">
+                        <button
+                            type="submit"
+                            className="btn btn-primary"
+                            disabled={loading || (user && vehicles.length === 0)}
+                        >
+                            {loading ? 'Calculating...' : 'Calculate Route'}
+                        </button>
+                        {result && result.trip_id && (
+                            <span className="alert alert-info saved-badge">✓ Saved to Trip History</span>
+                        )}
+                        {result && !user && (
+                            <span className="alert alert-info saved-badge">
+                                <Link to="/login">Log in</Link> or <Link to="/register">register</Link> to save trips
+                            </span>
+                        )}
+                    </div>
+                </form>
             </div>
 
             {result && (

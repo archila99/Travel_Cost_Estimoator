@@ -1,13 +1,36 @@
+# Local env and secrets (never in image)
 .env
-.env.backup
-.env.example
+.env.*
+
+# Git and IDE
 .git
 .gitignore
+.github
+.idea
+.vscode
+*.md
+
+# Python
 venv
+.venv
 __pycache__
-*.pyc
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache
+.coverage
+htmlcov
+*.db
+*.sqlite3
+
+# Frontend (built in Docker)
+frontend/node_modules
+frontend/dist
+frontend/.env
+frontend/.env.*
+
+# Misc
 .DS_Store
-README.md
 task.md
 implementation_plan.md
 walkthrough.md

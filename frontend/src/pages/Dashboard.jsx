@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import VehicleManager from '../components/VehicleManager';
 import RouteCalculator from '../components/RouteCalculator';
 import TripHistory from '../components/TripHistory';
@@ -13,19 +14,26 @@ export default function Dashboard() {
             <header className="app-header">
                 <div className="container">
                     <div className="header-content">
-                        <div style={{ flex: 1 }}>
+                        <div className="header-brand">
                             <h1 className="app-title">Route Planner & Cost Estimator</h1>
-                            <p className="app-subtitle">Calculate your travel costs with real-time route visualization</p>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', color: 'white' }}>
-                            <span>{user?.email}</span>
-                            <button
-                                onClick={logout}
-                                className="btn btn-sm"
-                                style={{ background: 'rgba(255,255,255,0.2)', color: 'white', border: 'none' }}
-                            >
-                                Logout
-                            </button>
+                        <div className="header-actions">
+                            {user ? (
+                                <>
+                                    <span className="header-email">{user.email}</span>
+                                    <button
+                                        onClick={logout}
+                                        className="btn btn-sm btn-ghost"
+                                    >
+                                        Logout
+                                    </button>
+                                </>
+                            ) : (
+                                <>
+                                    <Link to="/login" className="btn btn-sm btn-ghost">Log in</Link>
+                                    <Link to="/register" className="btn btn-sm btn-primary">Register</Link>
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -55,8 +63,22 @@ export default function Dashboard() {
 
                 <div className="app-content">
                     {activeTab === 'route' && <RouteCalculator />}
-                    {activeTab === 'vehicles' && <VehicleManager />}
-                    {activeTab === 'history' && <TripHistory />}
+                    {activeTab === 'vehicles' && (
+                        user ? <VehicleManager /> : (
+                            <div className="card">
+                                <p className="card-description">Log in to add and manage vehicles, then save your trips.</p>
+                                <Link to="/login" className="btn btn-primary">Log in</Link>
+                            </div>
+                        )
+                    )}
+                    {activeTab === 'history' && (
+                        user ? <TripHistory /> : (
+                            <div className="card">
+                                <p className="card-description">Log in to view and save your trip history.</p>
+                                <Link to="/login" className="btn btn-primary">Log in</Link>
+                            </div>
+                        )
+                    )}
                 </div>
             </main>
         </div>

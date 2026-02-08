@@ -11,11 +11,21 @@ class GoogleMapsClient:
         self.api_key = settings.google_maps_api_key
         self.base_url = "https://routes.googleapis.com/directions/v2:computeRoutes"
     
-    def _parse_duration(self, duration_str: str) -> int:
-        """Parse duration string like '123s' into seconds integer."""
-        if not duration_str or not duration_str.endswith('s'):
+    def _parse_duration(self, duration_value) -> int:
+        """Parse duration from API: string like '123s' or object like {'seconds': '123'}."""
+        if duration_value is None:
             return 0
-        return int(duration_str[:-1])
+        if isinstance(duration_value, dict):
+            sec = duration_value.get("seconds")
+            if sec is not None:
+                return int(sec) if isinstance(sec, (int, float)) else int(str(sec).rstrip("s") or 0)
+            return 0
+        if isinstance(duration_value, (int, float)):
+            return int(duration_value)
+        s = str(duration_value).strip()
+        if not s or not s.endswith("s"):
+            return 0
+        return int(s[:-1] or 0)
 
     def get_directions(
         self,
@@ -60,9 +70,13 @@ class GoogleMapsClient:
         }
 
         try:
-            # Check for placeholder key before making request
-            if "your_google_maps_api_key" in self.api_key:
-                 raise ValueError("Google Maps API Configuration Error: Default placeholder key in use. Please configure a valid API key.")
+            # Check for placeholder or missing key before making request
+            key = (self.api_key or "").strip()
+            if not key or "your_google_maps_api_key" in key:
+                raise ValueError(
+                    "Google Maps API Configuration Error: Set a valid GOOGLE_MAPS_API_KEY in .env. "
+                    "Get a key at https://console.cloud.google.com/google/maps-apis and enable Routes API."
+                )
 
             with httpx.Client() as client:
                 response = client.post(
@@ -90,7 +104,8 @@ class GoogleMapsClient:
                 parsed_routes = []
                 for idx, route in enumerate(data["routes"]):
                     distance = route.get("distanceMeters", 0)
-                    duration = self._parse_duration(route.get("duration", "0s"))
+                    duration_raw = route.get("duration", "0s")
+                    duration = self._parse_duration(duration_raw)
                     polyline = route.get("polyline", {}).get("encodedPolyline", "")
                     
                     route_data = {

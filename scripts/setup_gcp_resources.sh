@@ -2,11 +2,24 @@
 set -e
 
 # Configuration
-PROJECT_ID=$(gcloud config get-value project)
+PROJECT_ID=$(gcloud config get-value project 2>/dev/null || true)
+if [ -z "$PROJECT_ID" ]; then
+  echo "❌ No GCP project set. Run: gcloud config set project YOUR_PROJECT_ID"
+  exit 1
+fi
+
 REGION="us-central1"
 DB_INSTANCE_NAME="travel-estimator-db"
 DB_NAME="travel_estimator"
 REPO_NAME="travel-repo"
+
+# Fail fast if billing is not enabled
+if ! gcloud beta billing projects describe "$PROJECT_ID" &>/dev/null; then
+  echo "❌ Billing is not enabled for this project."
+  echo "   Link a billing account (new accounts get free credit):"
+  echo "   https://console.cloud.google.com/billing/linkedaccount?project=$PROJECT_ID"
+  exit 1
+fi
 
 echo "🚀 Starting Resource Setup for Project: $PROJECT_ID"
 
@@ -41,8 +54,8 @@ if ! gcloud sql instances describe $DB_INSTANCE_NAME &>/dev/null; then
     
     echo "✅ Database created."
     echo "---------------------------------------------------"
-    echo "SAVE THESE VALUES FOR GITHUB SECRETS:"
-    echo "DB_PASSWORD: $DB_PASSWORD"
+    echo "SAVE THIS PASSWORD for deploy.sh:"
+    echo "  export DB_PASSWORD='$DB_PASSWORD'"
 else
     echo "Cloud SQL instance already exists."
     echo "If you don't have the password, you may need to reset it."

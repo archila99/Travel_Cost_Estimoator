@@ -21,10 +21,16 @@ async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown events."""
     # Startup
     logger.info("Starting up application...")
-    # Create tables if they don't exist
-    logger.info("Ensuring database tables exist...")
-    Base.metadata.create_all(bind=engine)
-    logger.info("Database tables verified.")
+    try:
+        logger.info("Ensuring database tables exist...")
+        Base.metadata.create_all(bind=engine)
+        logger.info("Database tables verified.")
+    except Exception as e:
+        logger.exception(
+            "Database connection failed at startup. App will start but DB-dependent routes will fail. "
+            "Check DATABASE_URL, Cloud SQL instance, and that the Cloud Run service account has roles/cloudsql.client: %s",
+            e,
+        )
     yield
     # Shutdown
     logger.info("Shutting down application...")
