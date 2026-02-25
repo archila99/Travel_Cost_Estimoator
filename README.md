@@ -1,83 +1,79 @@
 # Travel Cost Estimator
 
-A full-stack web application for calculating travel costs and managing trip history with JWT authentication. Built with FastAPI (Python) and React.
+A full-stack web app for planning routes and estimating trip costs. Use it as a **guest** (no account) or **log in** to save vehicles and trip history. Built with FastAPI (Python) and React.
 
-![Python](https://img.shields.io/badge/Python-3.12-blue)
+![Python](https://img.shields.io/badge/Python-3.11-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.127.0-green)
 ![React](https://img.shields.io/badge/React-18.2.0-blue)
 
 ## Features
 
 ### 🔐 Authentication
-- User registration and login with JWT tokens
-- Secure password hashing with bcrypt
-- Protected API endpoints
-- User-specific data isolation
+- Register and log in with JWT (email + password)
+- Optional **registration key**: when the server is configured with `REGISTRATION_KEY`, new users must enter that key on the Register form
+- Secure password hashing (bcrypt); user-specific data isolation
 
-### 🚗 Vehicle Management
+### 🗺️ Route Planner (works with or without login)
+- **Guest:** Enter origin, destination, fuel consumption (L/100km) and fuel price; get route and cost. No account needed; the trip is not saved.
+- **Logged in:** Pick a saved vehicle; the primary route is saved to your trip history automatically.
+- Google Maps–based routes, distance, duration, fuel use and cost
+- Optional alternative routes; interactive map with polyline
+
+### 🚗 Vehicles (login required)
 - Add, edit, and delete vehicles
-- Track fuel consumption rates
-- Manage fuel prices per vehicle
+- Per-vehicle fuel type, consumption (L/100km), and fuel price
+- Used in Route Planner when logged in
 
-### 🗺️ Route Planning
-- Calculate routes using Google Maps API
-- Real-time cost estimation based on vehicle fuel consumption
-- Interactive map visualization
-- Alternative route suggestions
-- Save calculated routes to trip history
-
-### 📊 Trip History
-- View all saved trips
+### 📊 Trip History (login required)
+- List saved trips with pagination
 - Filter by vehicle
-- Pagination support
-- Delete unwanted trips
+- Delete trips
 
 ## Tech Stack
 
 ### Backend
-- **FastAPI** - Modern Python web framework
-- **SQLAlchemy** - ORM for database operations
-- **Alembic** - Optional: for future schema migrations (fresh deploys use `create_all()`)
-- **Pydantic** - Data validation
-- **JWT** - Authentication
-- **Google Maps API** - Route calculation
+- **FastAPI** – API and SPA serving (production)
+- **SQLAlchemy** – ORM; **PostgreSQL** (production) or **SQLite** (local)
+- **Pydantic** – Request/response validation
+- **JWT** (python-jose) + **bcrypt** – Auth
+- **Google Maps APIs** – Routes/Directions (backend), Maps JS (frontend)
+- **Alembic** – Optional migrations (fresh deploys use `create_all()` at startup)
 
 ### Frontend
-- **React** - UI library
-- **Vite** - Build tool
-- **Google Maps JavaScript API** - Map visualization
+- **React** + **Vite** – SPA; **React Router**
+- **Google Maps JavaScript API** – Map and polyline display
 
 ## Project Structure
 
 ```
 Travel-Cost-Estimator/
-├── app/                    # Backend application
-│   ├── models/            # SQLAlchemy models
-│   ├── routers/           # API endpoints
-│   ├── schemas/           # Pydantic schemas
-│   ├── config.py          # Configuration
-│   ├── database.py        # Database setup
-│   ├── dependencies.py    # Auth dependencies
-│   └── main.py           # FastAPI app
-├── frontend/              # React frontend
-│   ├── src/
-│   │   ├── components/   # React components
-│   │   ├── pages/        # Page components
-│   │   ├── context/      # Auth context
-│   │   └── services/     # API service
-│   └── index.html
-├── alembic/              # Database migrations
-├── tests/                # Test files
-├── requirements.txt      # Python dependencies
-└── .env.example         # Environment variables template
+├── app/                    # Backend
+│   ├── models/             # User, Vehicle, Trip
+│   ├── routers/            # auth, vehicles, trips, routes
+│   ├── schemas/            # Pydantic request/response
+│   ├── services/           # route_calculator, cost_estimator, maps_client
+│   ├── config.py           # Settings (from env)
+│   ├── database.py         # Engine, session
+│   ├── dependencies.py     # get_current_user, get_current_user_optional
+│   └── main.py             # FastAPI app, CORS, /api/*, static SPA
+├── frontend/src/
+│   ├── components/         # RouteCalculator, MapDisplay, VehicleManager, TripHistory
+│   ├── pages/              # Dashboard, Login, Register
+│   ├── context/           # AuthContext
+│   └── services/           # api.js (API client)
+├── alembic/                # Optional DB migrations
+├── scripts/                # setup_gcp_resources.sh, entrypoint.sh
+├── deploy.sh               # Build + deploy to Cloud Run
+├── Dockerfile              # Single image: backend + built frontend
+└── .env.example
 ```
 
 ## Getting Started
 
 ### Prerequisites
-- Python 3.12+
+- Python 3.11+
 - Node.js 18+
-- Google Maps API key
+- [Google Maps API key](https://developers.google.com/maps/documentation) (Routes/Directions and Maps JavaScript APIs enabled)
 
 ### Installation
 
@@ -87,76 +83,61 @@ git clone https://github.com/yourusername/Travel-Cost-Estimator.git
 cd Travel-Cost-Estimator
 ```
 
-2. **Set up backend**
+2. **Backend**
 ```bash
-# Create virtual environment
-python3.12 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
+python3.11 -m venv venv
+source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-
-# Set up environment variables
 cp .env.example .env
-# Edit .env and add your Google Maps API key and SECRET_KEY
+# Edit .env: set GOOGLE_MAPS_API_KEY, SECRET_KEY; optional DATABASE_URL (default SQLite)
 ```
 
-3. **Set up frontend**
+3. **Frontend**
 ```bash
 cd frontend
 npm install
 cp .env.example .env.local
-# Add your Google Maps API key to .env.local
+# Set VITE_API_BASE_URL=http://localhost:8000/api  and optionally VITE_GOOGLE_MAPS_API_KEY for the map
 ```
 
-4. **Initialize database**
+4. **Database** (optional for local SQLite)
 ```bash
 # From project root
 alembic upgrade head
 ```
+Or skip: the app creates tables on startup with `create_all()` if they don’t exist.
 
-### Running the Application
+### Running locally
 
-1. **Start backend** (from project root)
-```bash
-source venv/bin/activate
-uvicorn app.main:app --reload
-```
-Backend runs on http://localhost:8000
+1. **Backend** (project root): `uvicorn app.main:app --reload` → http://localhost:8000  
+2. **Frontend** (in `frontend/`): `npm run dev` → http://localhost:5173  
+3. Open **http://localhost:5173** in the browser. You can use the Route Planner as a guest (no login) or register/log in to save vehicles and trips.
 
-2. **Start frontend** (in new terminal)
-```bash
-cd frontend
-npm run dev
-```
-Frontend runs on http://localhost:5173
+## API
 
-3. **Access the application**
-- Open http://localhost:5173
-- Register a new account
-- Start adding vehicles and calculating routes!
+All API routes are under the **`/api`** prefix. Public: `POST /api/register`, `POST /api/token`. Health (no prefix): `GET /health`.
 
-## API Documentation
+- **Swagger UI**: http://localhost:8000/docs  
+- **ReDoc**: http://localhost:8000/redoc  
 
-Once the backend is running, visit:
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
+When deployed (single origin), use the same host, e.g. `https://your-service.run.app/docs`.
 
 ## Environment Variables
 
 ### Backend (.env)
-```env
-DATABASE_URL=sqlite:///./travel_estimator.db
-GOOGLE_MAPS_API_KEY=your_google_maps_api_key
-SECRET_KEY=your_secret_key_for_jwt
-```
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GOOGLE_MAPS_API_KEY` | Yes | Google Maps API key (Routes/Directions + Maps JS) |
+| `SECRET_KEY` | Yes | JWT signing secret |
+| `DATABASE_URL` | No (local) | Default: SQLite. For PostgreSQL: set in deploy or docker-compose |
+| `REGISTRATION_KEY` | No | If set, new users must provide this key on the Register form |
+| `DB_PASSWORD` | For deploy | Cloud SQL postgres password (used by `deploy.sh`) |
 
-### Frontend (.env.local)
-```env
-VITE_API_BASE_URL=http://localhost:8000/api
-VITE_GOOGLE_MAPS_API_KEY=your_google_maps_api_key
-```
-(The API base URL must include `/api` because the backend mounts all API routes under that prefix.)
+### Frontend (.env.local for dev)
+| Variable | Description |
+|----------|-------------|
+| `VITE_API_BASE_URL` | Backend API base, e.g. `http://localhost:8000/api` (must end with `/api`) |
+| `VITE_GOOGLE_MAPS_API_KEY` | Optional; for map tiles if different from backend key |
 
 ## Database and migrations
 
@@ -192,13 +173,10 @@ npm run preview
 ## Testing
 
 ```bash
-# Backend tests
+# Backend (when tests exist in tests/)
 pytest
-
-# Frontend tests
-cd frontend
-npm test
 ```
+The frontend does not include a test script by default.
 
 ## Deployment
 
@@ -242,18 +220,14 @@ Optional: set `REGION` or `SECRET_KEY` in `.env` before deploy. **Registration:*
 
 The script prints the Cloud Run service URL. Open it in a browser to use the app.
 
----
-
-### Using Docker (local)
+### Docker (local backend + DB)
 ```bash
 docker-compose up -d
 ```
+Runs PostgreSQL and the FastAPI backend on port 8000. Use the frontend dev server (`cd frontend && npm run dev`) and set `VITE_API_BASE_URL=http://localhost:8000/api` to talk to this backend.
 
-### Manual deployment (generic)
-1. Build frontend: `cd frontend && npm run build`
-2. Set environment variables for production
-3. Run backend with production server (e.g., Gunicorn)
-4. Serve frontend build files with nginx or similar
+### Production build (single container)
+The **Dockerfile** builds the frontend and serves it from the same process as the API (Gunicorn + static files). Used by `deploy.sh` for Cloud Run.
 
 ## Updating GitHub
 
