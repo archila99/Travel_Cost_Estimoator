@@ -1,0 +1,9 @@
+# Optional Render Blueprint: connect repo and use "Apply" or set these manually in the dashboard.
+services:
+  - type: web
+    name: travel-cost-estimator-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --worker-class uvicorn.workers.UvicornWorker --timeout 120 app.main:app
+    healthCheckPath: /health

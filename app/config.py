@@ -1,4 +1,5 @@
 from typing import Optional
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,9 +12,21 @@ class Settings(BaseSettings):
     # Database
     database_url: str
 
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def normalize_postgres_scheme(cls, v: str) -> str:
+        """Supabase and others may use postgres://; SQLAlchemy expects postgresql://."""
+        if isinstance(v, str) and v.startswith("postgres://"):
+            return "postgresql://" + v[len("postgres://") :]
+        return v
+
     # Security
     secret_key: str
     registration_key: Optional[str] = None
+
+    # CORS: comma-separated origins (e.g. https://your-app.vercel.app). Required for browser
+    # requests from a separate frontend (Vercel) with Authorization headers against this API.
+    cors_origins: Optional[str] = None
     
     # Application defaults
     fuel_price_default: float = 1.50

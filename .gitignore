@@ -40,6 +40,15 @@ env/
 .env
 .env.local
 .env.*.local
+frontend/.env
+
+# Local / CI secrets and keys
+*.pem
+*credentials*.json
+service-account*.json
+
+# Backend: Docker copies built SPA here; do not commit
+static/
 
 # Database
 *.db

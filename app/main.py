@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import logging
 
+from app.config import settings
 from app.database import engine, Base
 from app.models import User, Vehicle, Trip  # Import all models to ensure they are registered
 from app.routers import vehicles, routes, trips, auth
@@ -28,7 +29,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.exception(
             "Database connection failed at startup. App will start but DB-dependent routes will fail. "
-            "Check DATABASE_URL, Cloud SQL instance, and that the Cloud Run service account has roles/cloudsql.client: %s",
+            "Check DATABASE_URL (e.g. Supabase: host, port, sslmode=require), network access, and credentials: %s",
             e,
         )
     yield
@@ -44,10 +45,19 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Configure CORS
+# Configure CORS (split frontend on Vercel needs explicit origins when using credentials)
+def _cors_allow_origins():
+    raw = settings.cors_origins
+    if raw:
+        origins = [o.strip() for o in raw.split(",") if o.strip()]
+        if origins:
+            return origins
+    return ["*"]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify exact origins
+    allow_origins=_cors_allow_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
