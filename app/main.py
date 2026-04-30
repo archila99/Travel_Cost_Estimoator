@@ -50,9 +50,23 @@ def _cors_allow_origins():
     raw = settings.cors_origins
     if raw:
         origins = [o.strip() for o in raw.split(",") if o.strip()]
+        # Never allow "*" with allow_credentials=True (browsers will fail and middleware won't emit ACAO).
+        origins = [o for o in origins if o != "*"]
         if origins:
             return origins
-    return ["*"]
+    # IMPORTANT:
+    # With allow_credentials=True, using allow_origins=["*"] will not work in browsers
+    # (the middleware won't emit Access-Control-Allow-Origin for credentialed requests).
+    # For a safe default dev/prod experience, fall back to known frontend origins.
+    return [
+        # Vercel (preview / project domain)
+        "https://travel-cost-estimoator-c8tg-7oq2ue0ib-archila99s-projects.vercel.app",
+        # Vercel (production domain)
+        "https://travel-cost-estimator.vercel.app",
+        # Local dev
+        "http://localhost:5173",
+        "http://localhost:3000",
+    ]
 
 
 app.add_middleware(
