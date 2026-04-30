@@ -1,49 +1,21 @@
-# Build Stage: Frontend
-FROM node:18-alpine as frontend_build
-WORKDIR /frontend
-COPY frontend/package*.json ./
-RUN npm install
-COPY frontend .
-# Build with /api prefix for production
-ENV VITE_API_BASE_URL=/api
-RUN npm run build
-
-# Run Stage: Backend
+# Backend-only image (frontend is deployed separately to Vercel)
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies
+# System deps for psycopg2 (Postgres)
 RUN apt-get update && apt-get install -y \
     gcc \
-    postgresql-client \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy backend code
 COPY . .
 
-# Copy built frontend assets
-COPY --from=frontend_build /frontend/dist /app/static
+# Render sets PORT; bind to it (fallback for local docker runs).
+ENV PORT=10000
+EXPOSE 10000
 
-# Copy entrypoint script
-COPY scripts/entrypoint.sh /app/scripts/
-RUN chmod +x /app/scripts/entrypoint.sh
-
-# Expose port
-EXPOSE 8080
-
-# Use entrypoint script to run migrations
-ENTRYPOINT ["/app/scripts/entrypoint.sh"]
-
-# Set default PORT for Cloud Run (8080 is Cloud Run's default)
-ENV PORT=8080
-
-# Run with Gunicorn (production server)
-# Use the PORT environment variable for Cloud Run
-# Use sh -c to ensure PORT variable expansion works correctly
-CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-8080} --workers 1 --worker-class uvicorn.workers.UvicornWorker --threads 8 --timeout 120 app.main:app"]
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-10000} --workers 1 --worker-class uvicorn.workers.UvicornWorker --timeout 120 app.main:app"]
