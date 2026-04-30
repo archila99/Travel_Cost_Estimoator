@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import logging
+import os
 
 from app.config import settings
 from app.database import engine, Base
@@ -47,13 +48,35 @@ app = FastAPI(
 
 # Configure CORS (split frontend on Vercel needs explicit origins when using credentials)
 def _cors_allow_origins():
+    # Always allow local dev origins.
+    origins = [
+        "http://localhost:5173",
+        "http://localhost:3000",
+    ]
+
+    # Optional single-origin override (nice for Render + Vercel).
+    frontend_url = (os.getenv("FRONTEND_URL") or "").strip()
+    if frontend_url:
+        origins.append(frontend_url)
+
+    # Optional comma-separated allowlist.
     raw = settings.cors_origins
     if raw:
-        origins = [o.strip() for o in raw.split(",") if o.strip()]
-        # Never allow "*" with allow_credentials=True (browsers will fail and middleware won't emit ACAO).
-        origins = [o for o in origins if o != "*"]
-        if origins:
-            return origins
+        origins.extend([o.strip() for o in raw.split(",") if o.strip()])
+
+    # Never allow "*" with allow_credentials=True (browsers will fail and middleware won't emit ACAO).
+    origins = [o for o in origins if o != "*"]
+
+    # De-duplicate while preserving order
+    seen = set()
+    uniq = []
+    for o in origins:
+        if o and o not in seen:
+            seen.add(o)
+            uniq.append(o)
+
+    if uniq:
+        return uniq
     # IMPORTANT:
     # With allow_credentials=True, using allow_origins=["*"] will not work in browsers
     # (the middleware won't emit Access-Control-Allow-Origin for credentialed requests).
