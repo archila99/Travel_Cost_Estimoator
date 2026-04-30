@@ -13,6 +13,7 @@ export default function RouteCalculator() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [result, setResult] = useState(null);
+    const [fieldErrors, setFieldErrors] = useState({ origin: null, destination: null });
 
     const [formData, setFormData] = useState({
         origin: '',
@@ -42,11 +43,14 @@ export default function RouteCalculator() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError(null);
+        setFieldErrors({ origin: null, destination: null });
         try {
             setLoading(true);
+            const origin = (formData.origin || '').trim();
+            const destination = (formData.destination || '').trim();
             const payload = {
-                origin: formData.origin,
-                destination: formData.destination,
+                origin,
+                destination,
                 alternatives: formData.alternatives
             };
             if (user && formData.vehicle_id) {
@@ -58,7 +62,27 @@ export default function RouteCalculator() {
             const data = await api.calculateRoute(payload);
             setResult(data);
         } catch (err) {
-            setError('Failed to calculate route: ' + err.message);
+            const detail = err?.detail;
+            const code = typeof detail === 'object' && detail ? detail.error : null;
+            const msg = err?.message || 'Unknown error';
+
+            if (code === 'INVALID_LOCATION') {
+                if (detail?.field === 'origin') setFieldErrors((p) => ({ ...p, origin: detail.message }));
+                if (detail?.field === 'destination') setFieldErrors((p) => ({ ...p, destination: detail.message }));
+                if (!detail?.field) setError(detail?.message || 'Please enter valid locations.');
+            } else if (code === 'ROUTE_NOT_AVAILABLE') {
+                setError('This route is not drivable. Please try different locations.');
+            } else if (code === 'VALIDATION_ERROR') {
+                setError(detail?.message || 'Please check your inputs.');
+            } else if (code === 'ROUTING_TIMEOUT') {
+                setError('Routing service timed out. Please try again.');
+            } else if (code === 'ROUTING_SERVICE_ERROR') {
+                setError('Routing service is unavailable. Please try again later.');
+            } else {
+                // Fallback (avoid technical details)
+                setError('Failed to calculate route. Please try again.');
+                console.warn('Route calculation error:', msg, detail);
+            }
             setResult(null);
         } finally {
             setLoading(false);
@@ -100,24 +124,30 @@ export default function RouteCalculator() {
                             <input
                                 type="text"
                                 name="origin"
-                                className="form-input"
+                                className={`form-input ${fieldErrors.origin ? 'input-error' : ''}`}
                                 placeholder="e.g., New York, NY"
                                 value={formData.origin}
                                 onChange={handleChange}
                                 required
                             />
+                            {fieldErrors.origin && (
+                                <div className="field-error">{fieldErrors.origin}</div>
+                            )}
                         </div>
                         <div className="form-group">
                             <label className="form-label">Destination</label>
                             <input
                                 type="text"
                                 name="destination"
-                                className="form-input"
+                                className={`form-input ${fieldErrors.destination ? 'input-error' : ''}`}
                                 placeholder="e.g., Boston, MA"
                                 value={formData.destination}
                                 onChange={handleChange}
                                 required
                             />
+                            {fieldErrors.destination && (
+                                <div className="field-error">{fieldErrors.destination}</div>
+                            )}
                         </div>
                     </div>
 
@@ -294,8 +324,6 @@ export default function RouteCalculator() {
 
                         <MapDisplay
                             routes={result.routes}
-                            origin={result.origin}
-                            destination={result.destination}
                         />
                     </div>
                 </>

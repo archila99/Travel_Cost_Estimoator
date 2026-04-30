@@ -16,7 +16,7 @@ A full-stack web app for planning routes and estimating trip costs. Use it as a 
 ### 🗺️ Route Planner (works with or without login)
 - **Guest:** Enter origin, destination, fuel consumption (L/100km) and fuel price; get route and cost. No account needed; the trip is not saved.
 - **Logged in:** Pick a saved vehicle; the primary route is saved to your trip history automatically.
-- Google Maps–based routes, distance, duration, fuel use and cost
+- OpenRouteService-based routes, distance, duration, fuel use and cost
 - Optional alternative routes; interactive map with polyline
 
 ### 🚗 Vehicles (login required)
@@ -36,12 +36,12 @@ A full-stack web app for planning routes and estimating trip costs. Use it as a 
 - **SQLAlchemy** – ORM; **PostgreSQL** (production) or **SQLite** (local)
 - **Pydantic** – Request/response validation
 - **JWT** (python-jose) + **bcrypt** – Auth
-- **Google Maps APIs** – Routes/Directions (backend), Maps JS (frontend)
+- **OpenRouteService API** – Routing + geocoding
 - **Alembic** – Optional migrations (fresh deploys use `create_all()` at startup)
 
 ### Frontend
 - **React** + **Vite** – SPA; **React Router**
-- **Google Maps JavaScript API** – Map and polyline display
+- **Leaflet + OpenStreetMap tiles** – Map and route display
 
 ## Project Structure
 
@@ -73,7 +73,7 @@ Travel-Cost-Estimator/
 ### Prerequisites
 - Python 3.11+
 - Node.js 18+
-- [Google Maps API key](https://developers.google.com/maps/documentation) (Routes/Directions and Maps JavaScript APIs enabled)
+- [OpenRouteService API key](https://openrouteservice.org/dev/) (Directions + Geocoding)
 
 ### Installation
 
@@ -89,7 +89,7 @@ python3.11 -m venv venv
 source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env
-# Edit .env: set GOOGLE_MAPS_API_KEY, SECRET_KEY; optional DATABASE_URL (default SQLite)
+# Edit .env: set OPENROUTESERVICE_API_KEY, SECRET_KEY; optional DATABASE_URL (default SQLite)
 ```
 
 3. **Frontend**
@@ -97,7 +97,7 @@ cp .env.example .env
 cd frontend
 npm install
 cp .env.example .env.local
-# Set VITE_API_BASE_URL=http://localhost:8000/api  and optionally VITE_GOOGLE_MAPS_API_KEY for the map
+# Set VITE_API_BASE_URL=http://localhost:8000/api
 ```
 
 4. **Database** (optional for local SQLite)
@@ -127,7 +127,7 @@ When deployed (single origin), use the same host, e.g. `https://your-service.run
 ### Backend (.env)
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `GOOGLE_MAPS_API_KEY` | Yes | Google Maps API key (Routes/Directions + Maps JS) |
+| `OPENROUTESERVICE_API_KEY` | Yes | OpenRouteService API key (Directions + Geocoding) |
 | `SECRET_KEY` | Yes | JWT signing secret |
 | `DATABASE_URL` | No (local) | Default: SQLite. For PostgreSQL: set in deploy or docker-compose |
 | `REGISTRATION_KEY` | No | If set, new users must provide this key on the Register form |
@@ -137,7 +137,6 @@ When deployed (single origin), use the same host, e.g. `https://your-service.run
 | Variable | Description |
 |----------|-------------|
 | `VITE_API_BASE_URL` | Backend API base, e.g. `http://localhost:8000/api` (must end with `/api`) |
-| `VITE_GOOGLE_MAPS_API_KEY` | Optional; for map tiles if different from backend key |
 
 ## Database and migrations
 
@@ -204,7 +203,7 @@ The script builds the Docker image, pushes it to Artifact Registry, and deploys 
 Put your secrets in `.env` at the project root (see `.env.example`). `deploy.sh` loads `.env` automatically, so you don’t need to export variables each time:
 
 ```env
-GOOGLE_MAPS_API_KEY=your_google_maps_api_key
+OPENROUTESERVICE_API_KEY=your_openrouteservice_api_key
 DB_PASSWORD=password_from_setup_script
 ```
 
@@ -268,6 +267,6 @@ This project is licensed under the MIT License.
 
 ## Acknowledgments
 
-- Google Maps API for route calculation and visualization
+- OpenRouteService + OpenStreetMap for route calculation and visualization
 - FastAPI for the excellent Python web framework
 - React community for the amazing ecosystem

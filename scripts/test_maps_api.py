@@ -8,9 +8,9 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Load .env explicitly
 load_dotenv()
 
-key = os.getenv("GOOGLE_MAPS_API_KEY")
+key = os.getenv("OPENROUTESERVICE_API_KEY")
 
-print(f"GOOGLE_MAPS_API_KEY is {'Set' if key else 'Not Set'}")
+print(f"OPENROUTESERVICE_API_KEY is {'Set' if key else 'Not Set'}")
 if key:
     print(f"Key length: {len(key)}")
     print(f"Key preview: {key[:4]}...{key[-4:]}")

@@ -33,8 +33,16 @@ class ApiService {
             }
 
             if (!response.ok) {
-                const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-                throw new Error(error.detail || `HTTP ${response.status}`);
+                const errorBody = await response.json().catch(() => ({ detail: 'Request failed' }));
+                const detail = errorBody?.detail ?? errorBody;
+                const message =
+                    typeof detail === 'string'
+                        ? detail
+                        : (detail?.message || detail?.detail || `HTTP ${response.status}`);
+                const err = new Error(message);
+                err.detail = detail;
+                err.status = response.status;
+                throw err;
             }
 
             // Handle 204 No Content

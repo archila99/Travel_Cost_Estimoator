@@ -1,148 +1,66 @@
-import { useEffect, useRef, useState } from 'react';
-import { Loader } from '@googlemaps/js-api-loader';
+import { useEffect, useMemo } from 'react';
+import { MapContainer, Marker, Polyline, TileLayer, useMap } from 'react-leaflet';
+import polyline from 'polyline';
 
-const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-
-export default function MapDisplay({ routes, origin, destination }) {
-    const mapRef = useRef(null);
-    const mapInstanceRef = useRef(null);
-    const markersRef = useRef([]);
-    const polylinesRef = useRef([]);
-    const [isMapReady, setIsMapReady] = useState(false);
-
+function FitBounds({ points }) {
+    const map = useMap();
     useEffect(() => {
-        initializeMap();
-    }, []);
+        if (!points || points.length < 2) return;
+        // Leaflet expects [lat, lng]
+        map.fitBounds(points, { padding: [24, 24] });
+    }, [map, points]);
+    return null;
+}
 
-    useEffect(() => {
-        if (isMapReady && mapInstanceRef.current && routes && routes.length > 0) {
-            displayRoutes();
-        }
-    }, [isMapReady, routes, origin, destination]);
+export default function MapDisplay({ routes }) {
+    const colors = ['#4F46E5', '#10B981', '#F59E0B', '#EF4444'];
 
-    const initializeMap = async () => {
-        const loader = new Loader({
-            apiKey: GOOGLE_MAPS_API_KEY,
-            version: 'weekly',
-            libraries: ['geometry', 'marker']
-        });
+    const decodedRoutes = useMemo(() => {
+        if (!routes || routes.length === 0) return [];
+        return routes
+            .filter((r) => r?.polyline)
+            .map((r) => ({
+                ...r,
+                points: polyline.decode(r.polyline).map(([lat, lng]) => [lat, lng]),
+            }));
+    }, [routes]);
 
-        try {
-            const google = await loader.load();
-
-            mapInstanceRef.current = new google.maps.Map(mapRef.current, {
-                center: { lat: 37.7749, lng: -122.4194 }, // Default: San Francisco
-                zoom: 12,
-                mapId: "DEMO_MAP_ID", // Required for AdvancedMarkerElement
-                styles: [
-                    {
-                        featureType: 'all',
-                        elementType: 'geometry',
-                        stylers: [{ color: '#242f3e' }]
-                    },
-                    {
-                        featureType: 'all',
-                        elementType: 'labels.text.stroke',
-                        stylers: [{ color: '#242f3e' }]
-                    },
-                    {
-                        featureType: 'all',
-                        elementType: 'labels.text.fill',
-                        stylers: [{ color: '#746855' }]
-                    },
-                    {
-                        featureType: 'water',
-                        elementType: 'geometry',
-                        stylers: [{ color: '#17263c' }]
-                    }
-                ]
-            });
-            setIsMapReady(true);
-        } catch (error) {
-            console.error('Error loading Google Maps:', error);
-        }
-    };
-
-    const displayRoutes = async () => {
-        const google = window.google;
-        if (!google || !mapInstanceRef.current) return;
-
-        // Clear existing markers and polylines
-        markersRef.current.forEach(marker => { marker.map = null; });
-        polylinesRef.current.forEach(polyline => polyline.setMap(null));
-        markersRef.current = [];
-        polylinesRef.current = [];
-
-        const bounds = new google.maps.LatLngBounds();
-        const colors = ['#4F46E5', '#10B981', '#F59E0B', '#EF4444'];
-
-        // Draw each route
-        routes.forEach((route, index) => {
-            if (!route.polyline) return;
-
-            // Decode polyline
-            const path = google.maps.geometry.encoding.decodePath(route.polyline);
-
-            // Create polyline
-            const polyline = new google.maps.Polyline({
-                path: path,
-                geodesic: true,
-                strokeColor: colors[index % colors.length],
-                strokeOpacity: index === 0 ? 1.0 : 0.6,
-                strokeWeight: index === 0 ? 5 : 3,
-                map: mapInstanceRef.current
-            });
-
-            polylinesRef.current.push(polyline);
-
-            // Extend bounds
-            path.forEach(point => bounds.extend(point));
-
-            // Add markers for the first route
-            if (index === 0 && path.length > 0) {
-                const { AdvancedMarkerElement, PinElement } = google.maps.marker;
-
-                // Origin pin
-                const originPin = new PinElement({
-                    background: '#10B981',
-                    borderColor: '#ffffff',
-                    glyphColor: '#ffffff',
-                    glyph: 'A'
-                });
-
-                const originMarker = new AdvancedMarkerElement({
-                    position: path[0],
-                    map: mapInstanceRef.current,
-                    title: 'Origin',
-                    content: originPin.element
-                });
-
-                // Destination pin
-                const destPin = new PinElement({
-                    background: '#EF4444',
-                    borderColor: '#ffffff',
-                    glyphColor: '#ffffff',
-                    glyph: 'B'
-                });
-
-                const destMarker = new AdvancedMarkerElement({
-                    position: path[path.length - 1],
-                    map: mapInstanceRef.current,
-                    title: 'Destination',
-                    content: destPin.element
-                });
-
-                markersRef.current.push(originMarker, destMarker);
-            }
-        });
-
-        // Fit map to bounds
-        if (!bounds.isEmpty()) {
-            mapInstanceRef.current.fitBounds(bounds);
-        }
-    };
+    const primary = decodedRoutes[0];
+    const primaryPoints = primary?.points || null;
 
     return (
-        <div className="map-container" ref={mapRef}></div>
+        <div className="map-container">
+            <MapContainer
+                center={[51.5074, -0.1278]} // London default
+                zoom={6}
+                scrollWheelZoom={true}
+                style={{ height: '100%', width: '100%' }}
+            >
+                <TileLayer
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
+
+                {decodedRoutes.map((route, idx) => (
+                    <Polyline
+                        key={idx}
+                        positions={route.points}
+                        pathOptions={{
+                            color: colors[idx % colors.length],
+                            weight: idx === 0 ? 5 : 3,
+                            opacity: idx === 0 ? 1 : 0.6,
+                        }}
+                    />
+                ))}
+
+                {primaryPoints && primaryPoints.length > 0 && (
+                    <>
+                        <Marker position={primaryPoints[0]} />
+                        <Marker position={primaryPoints[primaryPoints.length - 1]} />
+                        <FitBounds points={primaryPoints} />
+                    </>
+                )}
+            </MapContainer>
+        </div>
     );
 }

@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
+import httpx
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.vehicle import Vehicle
@@ -11,6 +12,7 @@ from app.models.user import User
 from app.schemas.route import RouteRequest, RouteResponse, RouteOption
 from app.services.route_calculator import route_calculator
 from app.services.cost_estimator import cost_estimator
+from app.services.maps_client import RouteError
 from app.dependencies import get_current_user_optional
 
 logger = logging.getLogger(__name__)
@@ -60,9 +62,21 @@ def calculate_route(
         )
 
     try:
+        origin = (route_request.origin or "").strip()
+        destination = (route_request.destination or "").strip()
+        if not origin or not destination:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error": "VALIDATION_ERROR", "message": "Origin and destination are required."},
+            )
+        if origin.lower() == destination.lower():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error": "VALIDATION_ERROR", "message": "Origin and destination must be different."},
+            )
         routes = route_calculator.calculate_routes(
-            origin=route_request.origin,
-            destination=route_request.destination,
+            origin=origin,
+            destination=destination,
             alternatives=route_request.alternatives,
         )
         route_options = []
@@ -101,27 +115,22 @@ def calculate_route(
                 saved_trip_id = trip.id
 
         return RouteResponse(
-            origin=route_request.origin,
-            destination=route_request.destination,
+            origin=origin,
+            destination=destination,
             vehicle_id=getattr(vehicle, "id", None),
             routes=route_options,
             trip_id=saved_trip_id,
         )
     except HTTPException:
         raise
+    except RouteError as e:
+        raise HTTPException(
+            status_code=e.http_status,
+            detail={"error": e.code, "message": e.message, **({"field": e.field} if e.field else {})},
+        )
     except Exception as e:
         logger.exception("Route calculation failed: %s", e)
-        msg = str(e).lower()
-        # Return a clear message when the failure is likely API key or Google Maps config
-        if "api key" in msg or "google maps" in msg or "403" in msg or "401" in msg or "invalid" in msg or "placeholder" in msg:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=(
-                    "Google Maps API error. Check that GOOGLE_MAPS_API_KEY is set in .env, "
-                    "is valid, and that Routes API (Directions API) is enabled for your project."
-                ),
-            )
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error calculating route: {str(e)}",
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={"error": "ROUTING_SERVICE_ERROR", "message": "Routing service is unavailable. Please try again later."},
         )

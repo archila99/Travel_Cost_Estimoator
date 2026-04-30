@@ -75,7 +75,7 @@ alembic downgrade -1
 
 Required in `.env`:
 - `DATABASE_URL` - Database connection string
-- `GOOGLE_MAPS_API_KEY` - Google Maps API key
+- `OPENROUTESERVICE_API_KEY` - OpenRouteService API key (routing + geocoding)
 - `SECRET_KEY` - JWT secret key
 
 ## Authentication

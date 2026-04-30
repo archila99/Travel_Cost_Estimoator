@@ -6,8 +6,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Application configuration settings loaded from environment variables."""
     
-    # Google Maps API
-    google_maps_api_key: str
+    # OpenRouteService API (routing + geocoding)
+    openrouteservice_api_key: str
     
     # Database
     database_url: str
@@ -40,7 +40,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        case_sensitive=False
+        case_sensitive=False,
+        extra="ignore",
     )
 
 

@@ -5,9 +5,9 @@ set -e
 # Prereqs: gcloud CLI installed and logged in (gcloud auth login, gcloud config set project PROJECT_ID)
 #
 # First-time: run ./scripts/setup_gcp_resources.sh to create DB and Artifact Registry, then run this script.
-# Required: set GOOGLE_MAPS_API_KEY and DB_PASSWORD in .env (or export before running).
+# Required: set OPENROUTESERVICE_API_KEY and DB_PASSWORD in .env (or export before running).
 
-# Load .env from project root so you don't have to export GOOGLE_MAPS_API_KEY and DB_PASSWORD each time
+# Load .env from project root so you don't have to export OPENROUTESERVICE_API_KEY and DB_PASSWORD each time
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [ -f "$SCRIPT_DIR/.env" ]; then
   set -a
@@ -37,8 +37,8 @@ DB_NAME="travel_estimator"
 REPO_NAME="travel-repo"
 IMAGE_TAG="$REGION-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/$SERVICE_NAME:latest"
 
-if [ -z "$GOOGLE_MAPS_API_KEY" ]; then
-  echo "❌ GOOGLE_MAPS_API_KEY is not set. Export it: export GOOGLE_MAPS_API_KEY='your_key'"
+if [ -z "$OPENROUTESERVICE_API_KEY" ]; then
+  echo "❌ OPENROUTESERVICE_API_KEY is not set. Export it: export OPENROUTESERVICE_API_KEY='your_key'"
   exit 1
 fi
 
@@ -92,7 +92,7 @@ if [ -z "$SECRET_KEY" ] || [ "$SECRET_KEY" = "your_secret_key_for_jwt_here" ]; t
 fi
 
 # Registration: set REGISTRATION_KEY in .env to restrict sign-ups (users need the key). Leave unset for open registration.
-ENV_VARS="DATABASE_URL=${DATABASE_URL},SECRET_KEY=${SECRET_KEY},GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}"
+ENV_VARS="DATABASE_URL=${DATABASE_URL},SECRET_KEY=${SECRET_KEY},OPENROUTESERVICE_API_KEY=${OPENROUTESERVICE_API_KEY}"
 if [ -n "${REGISTRATION_KEY:-}" ]; then
   ENV_VARS="${ENV_VARS},REGISTRATION_KEY=${REGISTRATION_KEY}"
   echo "Registration: restricted (REGISTRATION_KEY set). Share the key with users who may register."

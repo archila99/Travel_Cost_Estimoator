@@ -61,6 +61,8 @@ def _cors_allow_origins():
     return [
         # Vercel (preview / project domain)
         "https://travel-cost-estimoator-c8tg-7oq2ue0ib-archila99s-projects.vercel.app",
+        # Vercel (production domain - spelling variants seen in deploys)
+        "https://travel-cost-estimoator.vercel.app",
         # Vercel (production domain)
         "https://travel-cost-estimator.vercel.app",
         # Local dev

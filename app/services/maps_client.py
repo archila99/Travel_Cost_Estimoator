@@ -1,31 +1,177 @@
-import googlemaps
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
+import logging
+import httpx
 from app.config import settings
 
 
-class GoogleMapsClient:
-    """Client for interacting with Google Maps Routes API."""
+class RouteError(Exception):
+    """Expected routing failure with a stable error code for the frontend."""
+
+    def __init__(self, code: str, message: str, http_status: int = 400, field: Optional[str] = None):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.http_status = http_status
+        self.field = field
+
+
+class OpenRouteServiceClient:
+    """Client for interacting with OpenRouteService (geocoding + directions)."""
     
     def __init__(self):
-        """Initialize the Google Maps client with API key."""
-        self.api_key = settings.google_maps_api_key
-        self.base_url = "https://routes.googleapis.com/directions/v2:computeRoutes"
+        """Initialize the OpenRouteService client with API key."""
+        self.api_key = settings.openrouteservice_api_key
+        self.directions_url = "https://api.openrouteservice.org/v2/directions/driving-car"
+        self.geocode_url = "https://api.openrouteservice.org/geocode/search"
+        self._log = logging.getLogger(__name__)
+
+    def _debug_enabled(self) -> bool:
+        # Dev-only: set ORS_DEBUG=true in environment to log statuses/coords
+        import os
+        return os.getenv("ORS_DEBUG", "").strip().lower() in ("1", "true", "yes", "on")
     
     def _parse_duration(self, duration_value) -> int:
-        """Parse duration from API: string like '123s' or object like {'seconds': '123'}."""
+        """ORS duration is usually in seconds (float). Keep helper for safety."""
         if duration_value is None:
             return 0
-        if isinstance(duration_value, dict):
-            sec = duration_value.get("seconds")
-            if sec is not None:
-                return int(sec) if isinstance(sec, (int, float)) else int(str(sec).rstrip("s") or 0)
+        try:
+            return int(float(duration_value))
+        except Exception:
             return 0
-        if isinstance(duration_value, (int, float)):
-            return int(duration_value)
-        s = str(duration_value).strip()
-        if not s or not s.endswith("s"):
-            return 0
-        return int(s[:-1] or 0)
+
+    def _headers(self) -> Dict[str, str]:
+        key = (self.api_key or "").strip()
+        if not key:
+            raise ValueError(
+                "OpenRouteService API Configuration Error: Set a valid OPENROUTESERVICE_API_KEY in the backend environment."
+            )
+        return {"Authorization": key, "Content-Type": "application/json"}
+
+    def _raise_for_geocode_status(self, status_code: int, field_name: str) -> None:
+        if status_code in (400, 404, 422):
+            raise RouteError(
+                code="INVALID_LOCATION",
+                message=f"Please enter a valid {field_name}.",
+                http_status=400,
+                field=field_name,
+            )
+        if status_code == 429:
+            raise RouteError(
+                code="RATE_LIMIT",
+                message="Routing service is busy right now. Please try again in a moment.",
+                http_status=503,
+            )
+        if 500 <= status_code <= 599:
+            raise RouteError(
+                code="ROUTING_SERVICE_ERROR",
+                message="Routing service is unavailable. Please try again later.",
+                http_status=502,
+            )
+        # 401/403 and any other unexpected status
+        raise RouteError(
+            code="ROUTING_SERVICE_ERROR",
+            message="Routing service is unavailable. Please try again later.",
+            http_status=502,
+        )
+
+    def _raise_for_directions_status(self, status_code: int, body: str) -> None:
+        if status_code == 429:
+            raise RouteError(
+                code="RATE_LIMIT",
+                message="Routing service is busy right now. Please try again in a moment.",
+                http_status=503,
+            )
+        if 500 <= status_code <= 599:
+            raise RouteError(
+                code="ROUTING_SERVICE_ERROR",
+                message="Routing service is unavailable. Please try again later.",
+                http_status=502,
+            )
+
+        lower = (body or "").lower()
+        if status_code in (400, 404, 422) and (
+            "no route" in lower
+            or "no rout" in lower
+            or "routable point" in lower
+            or "could not find" in lower
+            or "point not found" in lower
+            or "unable to find" in lower
+            or ("route" in lower and "found" in lower)
+        ):
+            raise RouteError(
+                code="ROUTE_NOT_AVAILABLE",
+                message="This route is not drivable. Please try different locations.",
+                http_status=400,
+            )
+
+        # Other 4xx
+        if 400 <= status_code <= 499:
+            raise RouteError(
+                code="ROUTING_SERVICE_ERROR",
+                message="Routing service is unavailable. Please try again later.",
+                http_status=502,
+            )
+
+        raise RouteError(
+            code="ROUTING_SERVICE_ERROR",
+            message="Routing service is unavailable. Please try again later.",
+            http_status=502,
+        )
+
+    def _geocode(self, text: str, field_name: str) -> list[float]:
+        """Geocode a free-text place to ORS coordinates [lon, lat]."""
+        cleaned = " ".join((text or "").strip().split())
+        if not cleaned:
+            raise RouteError(
+                code="INVALID_LOCATION",
+                message=f"Please enter a valid {field_name}.",
+                http_status=400,
+                field=field_name,
+            )
+        params = {"text": cleaned, "size": 1}
+        try:
+            with httpx.Client(timeout=httpx.Timeout(10.0, read=20.0)) as client:
+                res = client.get(
+                    self.geocode_url,
+                    headers={"Authorization": self._headers()["Authorization"]},
+                    params=params,
+                )
+        except httpx.TimeoutException as e:
+            raise RouteError(
+                code="ROUTING_TIMEOUT",
+                message="Routing service timed out. Please try again.",
+                http_status=504,
+            ) from e
+        except httpx.RequestError as e:
+            raise RouteError(
+                code="ROUTING_SERVICE_ERROR",
+                message="Routing service is unavailable. Please try again later.",
+                http_status=502,
+            ) from e
+
+        if self._debug_enabled():
+            self._log.info("ORS geocode %s status=%s", field_name, res.status_code)
+
+        if res.status_code != 200:
+            self._raise_for_geocode_status(res.status_code, field_name)
+        data = res.json()
+        features = data.get("features") or []
+        if not features:
+            raise RouteError(
+                code="INVALID_LOCATION",
+                message=f"Please enter a valid {field_name}.",
+                http_status=400,
+                field=field_name,
+            )
+        coords = features[0].get("geometry", {}).get("coordinates")
+        if not coords or len(coords) < 2:
+            raise RouteError(
+                code="INVALID_LOCATION",
+                message=f"Please enter a valid {field_name}.",
+                http_status=400,
+                field=field_name,
+            )
+        return [float(coords[0]), float(coords[1])]
 
     def get_directions(
         self,
@@ -34,7 +180,7 @@ class GoogleMapsClient:
         alternatives: bool = False
     ) -> List[Dict[str, Any]]:
         """
-        Get directions from origin to destination using Routes API.
+        Get directions from origin to destination using OpenRouteService.
         
         Args:
             origin: Starting location (address or coordinates)
@@ -47,85 +193,92 @@ class GoogleMapsClient:
         Raises:
             Exception: If the API request fails
         """
-        import httpx
-        import json
-
-        headers = {
-            "Content-Type": "application/json",
-            "X-Goog-Api-Key": self.api_key,
-            "X-Goog-FieldMask": "routes.distanceMeters,routes.duration,routes.polyline.encodedPolyline,routes.routeToken"
-        }
-
-        payload = {
-            "origin": {
-                "address": origin
-            },
-            "destination": {
-                "address": destination
-            },
-            "travelMode": "DRIVE",
-            "computeAlternativeRoutes": alternatives,
-            "routingPreference": "TRAFFIC_AWARE",
-            "units": "METRIC"
-        }
-
         try:
-            # Check for placeholder or missing key before making request
-            key = (self.api_key or "").strip()
-            if not key or "your_google_maps_api_key" in key:
-                raise ValueError(
-                    "Google Maps API Configuration Error: Set a valid GOOGLE_MAPS_API_KEY in .env. "
-                    "Get a key at https://console.cloud.google.com/google/maps-apis and enable Routes API."
+            start = self._geocode(origin, "origin")
+            end = self._geocode(destination, "destination")
+
+            if self._debug_enabled():
+                self._log.info("ORS coords origin=%s destination=%s", start, end)
+
+            payload: Dict[str, Any] = {"coordinates": [start, end]}
+            if alternatives:
+                # Ask ORS for up to 3 routes when alternatives are requested.
+                payload["alternative_routes"] = {"target_count": 3}
+
+            try:
+                with httpx.Client(timeout=httpx.Timeout(10.0, read=30.0)) as client:
+                    response = client.post(self.directions_url, headers=self._headers(), json=payload)
+            except httpx.TimeoutException as e:
+                raise RouteError(
+                    code="ROUTING_TIMEOUT",
+                    message="Routing service timed out. Please try again.",
+                    http_status=504,
+                ) from e
+            except httpx.RequestError as e:
+                raise RouteError(
+                    code="ROUTING_SERVICE_ERROR",
+                    message="Routing service is unavailable. Please try again later.",
+                    http_status=502,
+                ) from e
+
+            if self._debug_enabled():
+                self._log.info("ORS directions status=%s", response.status_code)
+
+            if response.status_code != 200:
+                body = response.text or ""
+                try:
+                    j = response.json()
+                    # ORS errors are often JSON with either "error" or nested messages.
+                    if isinstance(j, dict):
+                        if isinstance(j.get("error"), str):
+                            body = j["error"]
+                        elif isinstance(j.get("error"), dict) and isinstance(j["error"].get("message"), str):
+                            body = j["error"]["message"]
+                        elif isinstance(j.get("message"), str):
+                            body = j["message"]
+                except Exception:
+                    pass
+                self._raise_for_directions_status(response.status_code, body)
+
+            data = response.json()
+
+            routes = data.get("routes") or []
+            if not routes:
+                raise RouteError(
+                    code="ROUTE_NOT_AVAILABLE",
+                    message="This route is not drivable. Please try different locations.",
+                    http_status=400,
                 )
 
-            with httpx.Client() as client:
-                response = client.post(
-                    self.base_url,
-                    headers=headers,
-                    json=payload,
-                    timeout=10.0
-                )
-                
-                if response.status_code != 200:
-                    error_msg = f"Routes API Error: {response.status_code}"
-                    try:
-                        error_details = response.json()
-                        if "error" in error_details and "message" in error_details["error"]:
-                            error_msg += f" - {error_details['error']['message']}"
-                    except:
-                        error_msg += f" - {response.text}"
-                    raise Exception(error_msg)
-                
-                data = response.json()
-                
-                if "routes" not in data:
-                     raise ValueError(f"No routes found from {origin} to {destination}")
-
-                parsed_routes = []
-                for idx, route in enumerate(data["routes"]):
-                    distance = route.get("distanceMeters", 0)
-                    duration_raw = route.get("duration", "0s")
-                    duration = self._parse_duration(duration_raw)
-                    polyline = route.get("polyline", {}).get("encodedPolyline", "")
-                    
-                    route_data = {
-                        'distance_meters': distance,
-                        'duration_seconds': duration,
-                        'polyline': polyline,
-                        'route_type': 'fastest' if idx == 0 else f'alternative_{idx}',
-                        # Routes API doesn't return geocoded addresses in the route object easily
-                        # so we essentially echo back inputs or handle this differently if needed.
-                        'start_address': origin,
-                        'end_address': destination
+            parsed_routes: List[Dict[str, Any]] = []
+            for idx, route in enumerate(routes):
+                summary = route.get("summary") or {}
+                distance = summary.get("distance", 0)
+                duration = self._parse_duration(summary.get("duration", 0))
+                polyline = route.get("geometry", "")
+                parsed_routes.append(
+                    {
+                        "distance_meters": distance,
+                        "duration_seconds": duration,
+                        "polyline": polyline,
+                        "route_type": "fastest" if idx == 0 else f"alternative_{idx}",
+                        "start_address": origin,
+                        "end_address": destination,
                     }
-                    parsed_routes.append(route_data)
-                
-                return parsed_routes
+                )
 
-        except Exception as e:
-            # Re-raise exceptions to be handled by the router
-            raise e
+            return parsed_routes
+
+        except RouteError:
+            raise
+        except Exception:
+            # Anything unexpected becomes a stable provider error
+            raise RouteError(
+                code="ROUTING_SERVICE_ERROR",
+                message="Routing service is unavailable. Please try again later.",
+                http_status=502,
+            )
 
 
 # Global client instance
-maps_client = GoogleMapsClient()
+maps_client = OpenRouteServiceClient()

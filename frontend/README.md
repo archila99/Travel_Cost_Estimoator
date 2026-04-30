@@ -55,8 +55,7 @@ npm run preview
 
 Create `.env.local`:
 ```env
-VITE_API_BASE_URL=http://localhost:8000
-VITE_GOOGLE_MAPS_API_KEY=your_google_maps_api_key
+VITE_API_BASE_URL=http://localhost:8000/api
 ```
 
 ## Development
